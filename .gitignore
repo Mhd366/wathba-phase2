@@ -43,3 +43,7 @@ Thumbs.db
 frontend/.env.local
 
 WATHBA_AUTH_UPDATE_READY.zip
+
+WATHBA_VIDEO_BUTTON.patch
+
+WATHBA_SECURE_API.patch

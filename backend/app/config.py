@@ -8,9 +8,10 @@ class Settings(BaseSettings):
     model_version: str = "training"
     model_path: str = "/models/wathba-pose-v1.onnx"
     allowed_origins: str = "http://localhost:3000"
+    supabase_url: str = ""
+    supabase_publishable_key: str = ""
     chat_integration_url: str = ""
     recommendations_integration_url: str = ""
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()
-
