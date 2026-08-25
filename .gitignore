@@ -1,0 +1,41 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# JavaScript
+node_modules/
+.next/
+dist/
+.sites-runtime/
+
+# Models and generated analysis
+models/
+artifacts/
+uploads/
+reports/generated/
+*.pt
+*.pth
+*.onnx
+*.engine
+
+# Video and large media
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+
+# Local tools
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
