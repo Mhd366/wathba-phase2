@@ -1,7 +1,5 @@
 "use client";
 import { useMemo, useRef, useState } from "react";
-import { AuthScreen } from "./components/AuthScreen";
-import { supabase } from "./lib/supabase";
 
 type EventCode="100m"|"200m"|"400m";
 type View="overview"|"athletes"|"analyse"|"engineering"|"recommendations"|"reports";
@@ -45,13 +43,13 @@ export default function Home(){
  const run=()=>{if(!rosterReady)return;if(!file)setFile(`${event.toLowerCase()}-federation-trial.mp4`);setRunning(true);setTimeout(()=>{setRunning(false);const created=runnerDrafts.map(runner=>({lane:runner.lane,name:runner.name.trim(),event,speed:null,tier:"Analysis pending",trend:"—",score:0}));setCustomAthletes(current=>[...current,...created.filter(candidate=>!allAthletes.some(a=>a.name===candidate.name&&a.event===candidate.event))]);setSelectedAthlete(allAthletes.find(a=>a.name===created[0].name&&a.event===event)||created[0])},900)};
  const send=(q?:string)=>{const value=(q||input).trim();if(value){setChat(x=>[...x,value]);setInput("")}};
  const openAthlete=(athlete:typeof athletes[number])=>{setSelectedAthlete(athlete);setEvent(athlete.event as EventCode);setView("reports")};
- if(!signedIn)return <AuthScreen onAuthenticated={({role:accountRole})=>{setRole(accountRole);setView("overview");setEvent("100m");setCustomAthletes([]);setSelectedAthlete(null);setRunnerDrafts([{name:"",lane:1,height:"178"}]);setFile("");setSignedIn(true)}}/>;
+ if(!signedIn)return <LoginScreen onLogin={accountRole=>{setRole(accountRole);setView("overview");setEvent("100m");setCustomAthletes([]);setSelectedAthlete(null);setRunnerDrafts([{name:"",lane:1,height:"178"}]);setFile("");setSignedIn(true)}}/>;
  return <main className="shell">
   <aside className="sidebar">
    <a className="brand official-brand" href="#"><img src="/wathba-logo.jpeg" alt="WATHBA official logo"/><small>FEDERATION PERFORMANCE LAB</small></a>
    <nav>{(role==="coach"?[["overview","Command center","⌁"],["athletes","Squad & lanes","◎"],["analyse","New analysis","↗"],["engineering","Measurements","⌬"],["recommendations","Development","✦"],["reports","Reports","▤"]]:[["overview","My performance","⌁"],["analyse","Upload a sprint","↗"],["engineering","My measurements","⌬"],["recommendations","My development","✦"],["reports","My reports","▤"]]).map(([id,label,icon])=><button key={id} className={view===id?"active":""} onClick={()=>setView(id as View)}><span>{icon}</span>{label}</button>)}</nav>
    <div className="trial-card"><span>PHASE 02</span><strong>Federation trial</strong><p>Production foundation in progress</p><div><i style={{width:"68%"}}/></div><small>Week 1 of 4</small></div>
-   <button className="profile profile-button" onClick={async()=>{await supabase.auth.signOut();setSignedIn(false)}}><span>{role==="coach"?"WH":"AT"}</span><div><b>{role==="coach"?"Performance Team":"Athlete account"}</b><small>{role==="coach"?"Coach workspace · Sign out":"Athlete workspace · Sign out"}</small></div><i>↪</i></button>
+   <button className="profile profile-button" onClick={()=>setSignedIn(false)}><span>{role==="coach"?"WH":"AT"}</span><div><b>{role==="coach"?"Performance Team":"Athlete account"}</b><small>{role==="coach"?"Coach workspace · Sign out":"Athlete workspace · Sign out"}</small></div><i>↪</i></button>
   </aside>
 
   <section className="main-panel">
