@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     model_mode: str = "mock"
     model_version: str = "training"
     model_path: str = "/models/wathba-pose-v1.onnx"
+    database_url: str = ""
     allowed_origins: str = "http://localhost:3000"
     supabase_url: str = ""
     supabase_publishable_key: str = ""
