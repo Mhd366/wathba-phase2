@@ -1,7 +1,7 @@
-import pytest
+import os
 
-
-@pytest.fixture(autouse=True)
-def isolate_database(monkeypatch):
-    """API contract tests never write to the production Supabase database."""
-    monkeypatch.setattr("app.main.save_analysis", lambda owner_id, request, result: None)
+os.environ["MODEL_MODE"] = "mock"
+os.environ["DATABASE_URL"] = ""
+os.environ["SUPABASE_URL"] = ""
+os.environ["SUPABASE_PUBLISHABLE_KEY"] = ""
+os.environ["SUPABASE_SERVICE_ROLE_KEY"] = ""

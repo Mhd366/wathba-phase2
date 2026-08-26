@@ -6,8 +6,9 @@ from .auth import require_user
 from .database import load_analysis, save_analysis
 from .events import EVENTS
 from .report import build_pdf
-from .schemas import AnalysisCreate, AnalysisResult, IntegrationContext
-from .service import run_analysis
+from .schemas import (AnalysisCreate, AnalysisResult, IntegrationContext,
+                      RaceAnalysisCreate, RaceAnalysisResult)
+from .service import run_analysis, run_race_analysis
 
 app=FastAPI(title=settings.app_name,version=settings.contract_version)
 app.add_middleware(CORSMiddleware,allow_origins=settings.allowed_origins.split(","),allow_credentials=True,
@@ -25,6 +26,20 @@ def create_analysis(payload:AnalysisCreate,user:dict=Depends(require_user)):
     if payload.phase not in EVENTS[payload.event]["phases"]:
         raise HTTPException(422,f"Valid phases: {EVENTS[payload.event]['phases']}")
     result=run_analysis(payload); save_analysis(user["id"],payload,result); return result
+
+@app.post("/v1/races/analyse",response_model=RaceAnalysisResult,status_code=201)
+def create_race_analysis(payload:RaceAnalysisCreate,user:dict=Depends(require_user)):
+    if payload.phase not in EVENTS[payload.event]["phases"]:
+        raise HTTPException(422,f"Valid phases: {EVENTS[payload.event]['phases']}")
+    try:
+        batch, requests = run_race_analysis(payload)
+    except ValueError as error:
+        raise HTTPException(422,str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(503,str(error)) from error
+    for request, result in zip(requests, batch.results):
+        save_analysis(user["id"],request,result)
+    return batch
 
 @app.get("/v1/analyses/{analysis_id}",response_model=AnalysisResult)
 def get_analysis(analysis_id:str,user:dict=Depends(require_user)):
