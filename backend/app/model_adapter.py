@@ -1,5 +1,9 @@
 from abc import ABC, abstractmethod
 from .schemas import AnalysisCreate, MetricValue
+from pathlib import Path
+from tempfile import gettempdir
+from .model.artifact import download_race_video, ensure_model_artifact
+from .model.pipeline import analyse_video
 
 class PoseModelAdapter(ABC):
     @abstractmethod
@@ -25,11 +29,12 @@ class MockPoseModelAdapter(PoseModelAdapter):
 class TeamPoseModelAdapter(PoseModelAdapter):
     def __init__(self, model_path: str):
         self.model_path = model_path
-        # Load the approved ONNX/TorchScript model once at process startup.
+        self.model_path = str(ensure_model_artifact())
 
     def analyse(self, request: AnalysisCreate) -> dict:
-        # Integration boundary:
-        # video_object_key -> decoded frames -> team keypoints -> shared
-        # kinematics.py -> exact dictionary returned by MockPoseModelAdapter.
-        raise NotImplementedError("Connect the team's versioned model artifact here")
-
+        local_video = Path(gettempdir()) / f"wathba-{request.athlete_id}.mp4"
+        download_race_video(request.video_object_key, local_video)
+        try:
+            return analyse_video(local_video, Path(self.model_path))
+        finally:
+            local_video.unlink(missing_ok=True)

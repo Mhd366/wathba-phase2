@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from app.auth import require_user
 from app.main import app
+import app.main as main_module
 
 
 async def mock_authenticated_user():
@@ -13,6 +14,7 @@ async def mock_authenticated_user():
 
 
 app.dependency_overrides[require_user] = mock_authenticated_user
+main_module.save_analysis = lambda owner_id, payload, result: None
 client = TestClient(app)
 
 

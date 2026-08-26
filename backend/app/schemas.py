@@ -65,10 +65,23 @@ class AnalysisCreate(BaseModel):
     video_object_key: str = Field(min_length=3)
     lane: int | None = Field(default=None, ge=1, le=8)
 
+class RaceAthleteCreate(BaseModel):
+    athlete_id: str = Field(min_length=2, max_length=100)
+    athlete_name: str = Field(min_length=2, max_length=120)
+    height_cm: float = Field(gt=120, lt=230)
+    lane: int = Field(ge=1, le=8)
+
+class RaceAnalysisCreate(BaseModel):
+    event: EventCode
+    phase: str
+    video_object_key: str = Field(min_length=3)
+    athletes: list[RaceAthleteCreate] = Field(min_length=1, max_length=8)
+
 class AnalysisResult(BaseModel):
     analysis_id: str
     athlete_id: str
     athlete_name: str
+    lane: int | None = Field(default=None, ge=1, le=8)
     event: EventCode
     phase: str
     status: JobStatus
@@ -83,10 +96,16 @@ class AnalysisResult(BaseModel):
     priorities: list[DevelopmentPriority] = []
     message: str = ""
 
+class RaceAnalysisResult(BaseModel):
+    race_id: str
+    status: JobStatus
+    results: list[AnalysisResult]
+    unmatched_lanes: list[int] = []
+    message: str
+
 class IntegrationContext(BaseModel):
     analysis_id: str
     event: EventCode
     athlete_summary: dict
     metric_gaps: list[dict]
     quality_warnings: list[QualityWarning]
-
