@@ -44,7 +44,8 @@ def _lane_position(observations: list[tuple[int, np.ndarray, np.ndarray]]) -> fl
     return float(np.nanmedian(hips_y))
 
 
-def _metrics(observations: list[tuple[int, np.ndarray, np.ndarray]], fps: float) -> tuple[list[MetricValue], float]:
+def _metrics(observations: list[tuple[int, np.ndarray, np.ndarray]], fps: float,
+             height_cm: float) -> tuple[list[MetricValue], list[MetricValue], float, int]:
     frame_index = np.asarray([row[0] for row in observations], dtype=int)
     points = np.asarray([row[1] for row in observations], dtype=float)
     confidence = np.asarray([row[2] for row in observations], dtype=float)
@@ -55,8 +56,13 @@ def _metrics(observations: list[tuple[int, np.ndarray, np.ndarray]], fps: float)
 
     left_contact = _contact_mask(points[:, KP["left_ankle"], 1])
     right_contact = _contact_mask(points[:, KP["right_ankle"], 1])
-    contact_runs = _runs(left_contact) + _runs(right_contact)
-    contact_starts = sorted(start for start, _ in contact_runs)
+    left_runs, right_runs = _runs(left_contact), _runs(right_contact)
+    contact_runs = left_runs + right_runs
+    contact_events = sorted(
+        [(start, "left") for start, _ in left_runs]
+        + [(start, "right") for start, _ in right_runs]
+    )
+    contact_starts = [start for start, _ in contact_events]
     duration = max((frame_index[-1] - frame_index[0]) / fps, 1 / fps)
     step_frequency = len(contact_starts) / duration if len(contact_starts) >= 2 else None
     ground_contact = float(np.mean([(end - start) / fps for start, end in contact_runs])) if contact_runs else None
@@ -67,6 +73,7 @@ def _metrics(observations: list[tuple[int, np.ndarray, np.ndarray]], fps: float)
     flight_time = float(np.mean(valid_flights)) if valid_flights else None
 
     knees: list[float] = []
+    all_knees: list[float] = []
     trunks: list[float] = []
     for index in contact_starts:
         for side in ("left", "right"):
@@ -82,13 +89,44 @@ def _metrics(observations: list[tuple[int, np.ndarray, np.ndarray]], fps: float)
         if np.isfinite(shoulders).all() and np.isfinite(hips).all():
             trunks.append(float(np.degrees(np.arctan2(abs(shoulders[0] - hips[0]), abs(hips[1] - shoulders[1]) + 1e-8))))
 
+    for index in range(len(points)):
+        for side in ("left", "right"):
+            value = _angle(
+                points[index, KP[f"{side}_hip"]],
+                points[index, KP[f"{side}_knee"]],
+                points[index, KP[f"{side}_ankle"]],
+            )
+            if value is not None:
+                all_knees.append(value)
+
+    step_intervals: dict[str, list[float]] = {"left": [], "right": []}
+    for previous, current in zip(contact_events, contact_events[1:]):
+        previous_index, previous_side = previous
+        current_index, current_side = current
+        interval = (frame_index[current_index] - frame_index[previous_index]) / fps
+        if current_side != previous_side and .12 <= interval <= .80:
+            step_intervals[current_side].append(float(interval))
+    left_step = float(np.median(step_intervals["left"])) if step_intervals["left"] else None
+    right_step = float(np.median(step_intervals["right"])) if step_intervals["right"] else None
+    step_asymmetry = None
+    if left_step is not None and right_step is not None and (left_step + right_step) > 0:
+        step_asymmetry = abs(left_step - right_step) / ((left_step + right_step) / 2.0) * 100.0
+
+    knee_at_contact = float(np.mean(knees)) if knees else None
+    minimum_knee = float(np.mean(sorted(all_knees)[:3])) if len(all_knees) >= 3 else None
+    knee_delta = max(0.0, knee_at_contact - minimum_knee) if knee_at_contact is not None and minimum_knee is not None else None
+    height_m = height_cm / 100.0
+    normalised_sf = step_frequency * np.sqrt(height_m / 9.81) if step_frequency is not None and height_m > 0 else None
+    duty_factor = ground_contact * step_frequency if ground_contact is not None and step_frequency is not None else None
+    contact_flight = ground_contact / flight_time if ground_contact is not None and flight_time is not None and flight_time > 0 else None
+
     timing_confidence = float(min(1.0, fps / 100.0) * usable_ratio)
     values = [
         ("SF", "Step frequency", step_frequency, "Hz", timing_confidence),
         ("SL", "Step length", None, "m", 0.0),
         ("GCT", "Ground contact", ground_contact, "s", timing_confidence),
         ("FT", "Flight time", flight_time, "s", timing_confidence),
-        ("KNEE", "Knee angle", float(np.mean(knees)) if knees else None, "deg", usable_ratio),
+        ("KNEE", "Knee angle", knee_at_contact, "deg", usable_ratio),
         ("LEAN", "Trunk lean", float(np.mean(trunks)) if trunks else None, "deg", usable_ratio),
     ]
     metrics = [
@@ -96,10 +134,26 @@ def _metrics(observations: list[tuple[int, np.ndarray, np.ndarray]], fps: float)
                     confidence=float(conf), status="measured" if value is not None else "unavailable")
         for key, label, value, unit, conf in values
     ]
-    return metrics, usable_ratio
+    derived_values = [
+        ("DUTY", "Duty factor", duty_factor, "ratio", timing_confidence),
+        ("CFR", "Contact / flight", contact_flight, "ratio", timing_confidence),
+        ("RSL", "Relative step length", None, "ratio", 0.0),
+        ("NSF", "Normalised step frequency", float(normalised_sf) if normalised_sf is not None else None, "dimensionless", timing_confidence),
+        ("FROUDE", "Froude number", None, "dimensionless", 0.0),
+        ("KDELTA", "Knee delta", knee_delta, "deg", usable_ratio),
+        ("ASYM", "Step asymmetry", step_asymmetry, "%", timing_confidence),
+    ]
+    derived = [
+        MetricValue(key=key, label=label, value=value, unit=unit,
+                    confidence=float(conf), status="measured" if value is not None else "unavailable")
+        for key, label, value, unit, conf in derived_values
+    ]
+    return metrics, derived, usable_ratio, len(contact_events)
 
 
-def analyse_race_video(video_path: Path, model_path: Path, lanes: list[int]) -> tuple[dict[int, dict], list[int]]:
+def analyse_race_video(video_path: Path, model_path: Path,
+                       athlete_heights: dict[int, float]) -> tuple[dict[int, dict], list[int]]:
+    lanes = list(athlete_heights)
     capture = cv2.VideoCapture(str(video_path))
     if not capture.isOpened():
         raise ValueError("The uploaded video could not be decoded")
@@ -138,7 +192,9 @@ def analyse_race_video(video_path: Path, model_path: Path, lanes: list[int]) -> 
 
     outputs: dict[int, dict] = {}
     for lane, (track_id, observations, score) in zip(ordered_lanes, candidates):
-        metrics, usable_ratio = _metrics(observations, fps)
+        metrics, derived, usable_ratio, valid_steps = _metrics(
+            observations, fps, athlete_heights[lane]
+        )
         outputs[lane] = {
             "frames_read": frame_number,
             "fps": fps,
@@ -146,6 +202,8 @@ def analyse_race_video(video_path: Path, model_path: Path, lanes: list[int]) -> 
             "body_visible_ratio": usable_ratio,
             "segment_speed_mps": None,
             "metrics": metrics,
+            "derived_metrics": derived,
+            "valid_steps": valid_steps,
             "track_id": track_id,
             "track_score": score,
         }

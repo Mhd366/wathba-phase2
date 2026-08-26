@@ -39,7 +39,9 @@ def _build_result(request: AnalysisCreate, raw: dict) -> AnalysisResult:
         athlete_name=request.athlete_name, lane=request.lane, event=request.event, phase=request.phase, status=status,
         reference_status=reference_status, contract_version=settings.contract_version,
         model_version=settings.model_version, quality=quality, segment_speed_mps=speed,
-        metrics=raw.get("metrics", []), comparisons=comparisons, priorities=priorities, message=message)
+        metrics=raw.get("metrics", []), derived_metrics=raw.get("derived_metrics", []),
+        valid_steps=raw.get("valid_steps", 0), comparisons=comparisons,
+        priorities=priorities, message=message)
 
 def run_analysis(request: AnalysisCreate) -> AnalysisResult:
     adapter = MockPoseModelAdapter() if settings.model_mode == "mock" else TeamPoseModelAdapter(settings.model_path)
@@ -55,7 +57,10 @@ def run_race_analysis(request: RaceAnalysisCreate) -> tuple[RaceAnalysisResult, 
     model_path = ensure_model_artifact()
     download_race_video(request.video_object_key, local_video)
     try:
-        by_lane, unmatched = analyse_race_video(local_video, model_path, lanes)
+        by_lane, unmatched = analyse_race_video(
+            local_video, model_path,
+            {athlete.lane: athlete.height_cm for athlete in request.athletes},
+        )
     finally:
         local_video.unlink(missing_ok=True)
 

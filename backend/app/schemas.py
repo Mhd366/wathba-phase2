@@ -92,6 +92,8 @@ class AnalysisResult(BaseModel):
     quality: CaptureQuality
     segment_speed_mps: float | None = None
     metrics: list[MetricValue] = []
+    derived_metrics: list[MetricValue] = []
+    valid_steps: int = 0
     comparisons: list[StageComparison] = []
     priorities: list[DevelopmentPriority] = []
     message: str = ""
